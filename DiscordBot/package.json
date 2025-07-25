@@ -5,6 +5,7 @@
   "main": "src/bot.js",
   "type": "module",
   "scripts": {
+    "install-guide": "echo 'Run: cp .env.example .env && edit .env with your Discord info && npm start'",
     "start": "node src/bot.js",
     "dev": "node --watch src/bot.js",
     "test": "echo \"Error: no test specified\" && exit 1"
