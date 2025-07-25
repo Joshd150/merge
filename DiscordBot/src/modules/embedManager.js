@@ -156,42 +156,46 @@ export class EmbedManager {
       // Remove the user's reaction to keep it at 1
       await reaction.users.remove(user.id)
 
-      // Create a temporary interaction context to show modal directly
-      await this.createModalInteraction(user, config, reaction.message)
+      // Show modal directly - we need to create a fake interaction
+      // Since reactions don't provide interaction context, we'll send a DM with instructions
+      await this.sendModalInstructions(user, config, reaction.message.guild)
       
     } catch (error) {
       logger.error("Error handling reaction:", error)
     }
   }
 
-  async createModalInteraction(user, config, message) {
+  async sendModalInstructions(user, config, guild) {
     try {
-      // Send a temporary message with button that will trigger the modal
+      // Since Discord reactions don't provide interaction context for modals,
+      // we need to send a DM with a button that will show the modal
+      const channel = await user.createDM()
+      
       const button = new ButtonBuilder()
-        .setCustomId(`show_modal_${config.id}_${user.id}`)
+        .setCustomId(`show_modal_${config.id}`)
         .setLabel(`Open ${config.title}`)
         .setStyle(ButtonStyle.Primary)
         .setEmoji(config.emoji)
 
       const row = new ActionRowBuilder().addComponents(button)
 
-      const tempMessage = await message.channel.send({
-        content: `<@${user.id}> Click the button below to open the form:`,
+      const embed = new EmbedBuilder()
+        .setTitle("📝 Form Ready")
+        .setDescription(`Click the button below to open the **${config.title}** form.`)
+        .setColor(config.color)
+        .setFooter({
+          text: `From ${guild.name}`,
+          iconURL: guild.iconURL()
+        })
+
+      await channel.send({
+        embeds: [embed],
         components: [row]
       })
 
-      // Delete the temporary message after 30 seconds
-      setTimeout(async () => {
-        try {
-          await tempMessage.delete()
-        } catch (error) {
-          // Message might already be deleted
-        }
-      }, 30000)
-
-      logger.debug(`Created modal trigger for ${user.tag} for config ${config.id}`)
+      logger.debug(`Sent modal instructions to ${user.tag} for config ${config.id}`)
     } catch (error) {
-      logger.error("Error creating modal interaction:", error)
+      logger.error("Error sending modal instructions:", error)
     }
   }
 
@@ -200,18 +204,7 @@ export class EmbedManager {
       const customId = interaction.customId
       
       if (customId.startsWith('show_modal_')) {
-        const parts = customId.split('_')
-        const configId = parts[2]
-        const userId = parts[3]
-        
-        // Only allow the user who triggered it to use the button
-        if (interaction.user.id !== userId) {
-          await interaction.reply({
-            content: "❌ This form is not for you.",
-            flags: 64 // EPHEMERAL flag
-          })
-          return
-        }
+        const configId = customId.replace('show_modal_', '')
         
         const config = this.embedConfigs.get(configId)
         
@@ -248,13 +241,6 @@ export class EmbedManager {
 
         modal.addComponents(...components)
         await interaction.showModal(modal)
-        
-        // Delete the temporary message after modal is shown
-        try {
-          await interaction.message.delete()
-        } catch (error) {
-          // Message might already be deleted
-        }
       }
     } catch (error) {
       logger.error("Error handling button interaction:", error)
@@ -317,16 +303,19 @@ export class EmbedManager {
         return
       }
 
+      // Get the member to access their server nickname
+      const member = guild.members.cache.get(user.id)
+      const displayName = member ? (member.nickname || member.displayName || user.username) : user.username
       const embed = new EmbedBuilder()
         .setTitle(config.responseTitle)
         .setColor(config.color)
         .setAuthor({
-          name: user.displayName || user.username,
+          name: displayName,
           iconURL: user.displayAvatarURL()
         })
         .setTimestamp()
         .setFooter({
-          text: `User ID: ${user.id}`,
+          text: `Submitted by ${displayName} • User ID: ${user.id}`,
           iconURL: guild.iconURL()
         })
 
@@ -340,7 +329,7 @@ export class EmbedManager {
       }
 
       await targetChannel.send({ embeds: [embed] })
-      logger.info(`Sent response from ${user.tag} to ${targetChannel.name}`)
+      logger.info(`Sent response from ${displayName} (${user.tag}) to ${targetChannel.name}`)
       
     } catch (error) {
       logger.error("Error sending response:", error)

@@ -635,7 +635,7 @@
             const title = document.getElementById('title').value || 'Sample Embed Title';
             const description = document.getElementById('description').value || 'Click the reaction below to open the form.';
             const color = document.getElementById('color').value;
-            const emoji = document.getElementById('emoji').value || '📝';
+            const emoji = document.getElementById('emoji').value;
             const responseTitle = document.getElementById('responseTitle').value || 'Response';
             
             const fields = Array.from(document.querySelectorAll('.field-item')).map(item => {
@@ -654,26 +654,29 @@
                 } : null;
             }).filter(Boolean);
             
+            // Update description based on whether emoji is present
+            const finalDescription = description || (emoji ? 'Click the reaction below to open the form.' : 'Information embed - no interaction required.');
+            
             // Update main embed preview
             document.getElementById('embedPreview').innerHTML = `
                 <div class="discord-embed" style="border-left-color: ${color}">
                     <div class="embed-title">${title}</div>
-                    <div class="embed-description">${description}</div>
-                    <div class="embed-footer">Click the reaction to open the form</div>
+                    <div class="embed-description">${finalDescription}</div>
+                    <div class="embed-footer">${emoji ? 'Click the reaction to open the form' : 'Display-only embed'}</div>
                 </div>
-                <div class="reaction-preview">
+                ${emoji ? `<div class="reaction-preview">
                     <span class="emoji-display">${emoji}</span> 1 reaction (auto-managed)
-                </div>
+                </div>` : '<div class="reaction-preview">No reactions (display-only)</div>'}
             `;
             
             // Update response preview
-            document.getElementById('responsePreview').innerHTML = `
+            document.getElementById('responsePreview').innerHTML = emoji && fields.length > 0 ? `
                 <div class="discord-embed" style="border-left-color: ${color}">
                     <div class="embed-title">${responseTitle}</div>
                     ${fields.map(field => field.preview).join('')}
-                    <div class="embed-footer">Submitted by Username • User ID: 123456789</div>
+                    <div class="embed-footer">Submitted by ServerNickname • User ID: 123456789</div>
                 </div>
-            `;
+            ` : '<div style="color: #72767d; font-style: italic;">No response preview (display-only embed or no fields)</div>';
         }
 
         document.getElementById('embedForm').addEventListener('submit', async function(e) {
