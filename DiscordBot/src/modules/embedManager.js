@@ -37,7 +37,6 @@ export class EmbedManager {
         logger.info("Migrated legacy embed configurations")
       }
 
-
       // Restore active embeds
       if (data.activeEmbeds) {
         for (const [messageId, embedData] of Object.entries(data.activeEmbeds)) {
@@ -70,11 +69,13 @@ export class EmbedManager {
       title: configData.title || "Custom Embed",
       description: configData.description || "",
       color: configData.color || "#5865F2",
-      emoji: configData.emoji || "📝",
+      emoji: configData.emoji || "", // Can be empty for display-only embeds
+      buttonLabel: configData.buttonLabel || "Open Form", // Custom button text
       channelId: configData.channelId,
       targetChannelId: configData.targetChannelId,
       responseTitle: configData.responseTitle || "Response",
       fields: configData.fields || [],
+      interactionType: configData.interactionType || "button", // "button", "reaction", or "none"
       createdAt: new Date().toISOString()
     }
 
@@ -90,7 +91,7 @@ export class EmbedManager {
         throw new Error(`Embed configuration ${configId} not found`)
       }
 
-      const guild = this.client.guilds.cache.get(config.discord?.guildId || config.guildId || process.env.GUILD_ID)
+      const guild = this.client.guilds.cache.get(config.guildId || process.env.GUILD_ID)
       if (!guild) {
         throw new Error("Guild not found")
       }
@@ -104,19 +105,53 @@ export class EmbedManager {
         .setTitle(config.title)
         .setDescription(config.description)
         .setColor(config.color)
-        .setFooter({
-          text: config.emoji ? "Click the reaction below to respond" : "Interactive embed",
-          iconURL: guild.iconURL()
-        })
         .setTimestamp()
 
-      const message = await channel.send({ embeds: [embed] })
-      
-      // Only add reaction if emoji is configured
-      if (config.emoji && config.emoji.trim()) {
+      // Determine footer text based on interaction type
+      let footerText = "Information embed"
+      if (config.fields && config.fields.length > 0) {
+        if (config.interactionType === "button") {
+          footerText = "Click the button below to respond"
+        } else if (config.interactionType === "reaction" && config.emoji) {
+          footerText = "Click the reaction to respond"
+        }
+      }
+
+      embed.setFooter({
+        text: footerText,
+        iconURL: guild.iconURL()
+      })
+
+      const components = []
+
+      // Add button if this is an interactive form with button interaction
+      if (config.fields && config.fields.length > 0 && config.interactionType === "button") {
+        const button = new ButtonBuilder()
+          .setCustomId(`form_button_${config.id}`)
+          .setLabel(config.buttonLabel || "Open Form")
+          .setStyle(ButtonStyle.Primary)
+
+        // Add emoji to button if provided
+        if (config.emoji && config.emoji.trim()) {
+          button.setEmoji(config.emoji)
+        }
+
+        const row = new ActionRowBuilder().addComponents(button)
+        components.push(row)
+      }
+
+      const messageOptions = { embeds: [embed] }
+      if (components.length > 0) {
+        messageOptions.components = components
+      }
+
+      const message = await channel.send(messageOptions)
+
+      // Add emoji reaction if using reaction method
+      if (config.fields && config.fields.length > 0 && config.interactionType === "reaction" && config.emoji && config.emoji.trim()) {
         await message.react(config.emoji)
         
-        // Store the active embed only if it has reactions
+        // Store the active embed for reaction handling
         this.activeEmbeds.set(message.id, {
           configId: configId,
           channelId: channel.id,
@@ -124,7 +159,6 @@ export class EmbedManager {
           createdAt: new Date().toISOString()
         })
       }
-
 
       await this.saveData()
       
@@ -136,6 +170,64 @@ export class EmbedManager {
     }
   }
 
+  /**
+   * Handle button interactions - DIRECT MODAL POPUP
+   * This is the recommended method for seamless user experience
+   */
+  async handleButtonInteraction(interaction) {
+    try {
+      const customId = interaction.customId
+      
+      // Handle form button clicks - DIRECT MODAL POPUP
+      if (customId.startsWith('form_button_')) {
+        const configId = customId.replace('form_button_', '')
+        const config = this.embedConfigs.get(configId)
+        
+        if (!config) {
+          await interaction.reply({
+            content: "❌ Form configuration not found.",
+            flags: 64 // EPHEMERAL
+          })
+          return
+        }
+
+        // Create and show modal DIRECTLY - no intermediate steps
+        const modal = await this.createModal(config)
+        await interaction.showModal(modal)
+        
+        logger.debug(`Showed modal directly to ${interaction.user.tag} for config ${config.id}`)
+        return
+      }
+
+      // Legacy support for old button format
+      if (customId.startsWith('show_modal_')) {
+        const configId = customId.replace('show_modal_', '')
+        const config = this.embedConfigs.get(configId)
+        
+        if (!config) {
+          await interaction.reply({
+            content: "❌ Form configuration not found.",
+            flags: 64 // EPHEMERAL
+          })
+          return
+        }
+
+        const modal = await this.createModal(config)
+        await interaction.showModal(modal)
+      }
+    } catch (error) {
+      logger.error("Error handling button interaction:", error)
+      await interaction.reply({
+        content: "❌ An error occurred while opening the form.",
+        flags: 64 // EPHEMERAL
+      }).catch(() => {}) // Ignore if already replied
+    }
+  }
+
+  /**
+   * Handle emoji reactions - WORKAROUND FOR DIRECT MODAL
+   * Note: This is a limitation of Discord's API - reactions can't directly show modals
+   */
   async handleReaction(reaction, user) {
     try {
       if (user.bot) return
@@ -153,26 +245,13 @@ export class EmbedManager {
         return
       }
 
-      // Remove the user's reaction to keep it at 1
+      // Remove the user's reaction to keep it clean
       await reaction.users.remove(user.id)
 
-      // Show modal directly - we need to create a fake interaction
-      // Since reactions don't provide interaction context, we'll send a DM with instructions
-      await this.sendModalInstructions(user, config, reaction.message.guild)
-      
-    } catch (error) {
-      logger.error("Error handling reaction:", error)
-    }
-  }
-
-  async sendModalInstructions(user, config, guild) {
-    try {
-      // Since Discord reactions don't provide interaction context for modals,
-      // we need to send a DM with a button that will show the modal
-      const channel = await user.createDM()
-      
+      // WORKAROUND: Create a temporary button that triggers the modal
+      // This is the closest we can get to "direct" modal from reactions
       const button = new ButtonBuilder()
-        .setCustomId(`show_modal_${config.id}`)
+        .setCustomId(`form_button_${config.id}`)
         .setLabel(`Open ${config.title}`)
         .setStyle(ButtonStyle.Primary)
         .setEmoji(config.emoji)
@@ -181,72 +260,67 @@ export class EmbedManager {
 
       const embed = new EmbedBuilder()
         .setTitle("📝 Form Ready")
-        .setDescription(`Click the button below to open the **${config.title}** form.`)
+        .setDescription(`Click the button to open **${config.title}**`)
         .setColor(config.color)
-        .setFooter({
-          text: `From ${guild.name}`,
-          iconURL: guild.iconURL()
-        })
 
-      await channel.send({
+      // Send temporary message that auto-deletes
+      const tempMessage = await reaction.message.channel.send({
+        content: `<@${user.id}>`,
         embeds: [embed],
         components: [row]
       })
 
-      logger.debug(`Sent modal instructions to ${user.tag} for config ${config.id}`)
-    } catch (error) {
-      logger.error("Error sending modal instructions:", error)
-    }
-  }
+      // Auto-delete after 30 seconds
+      setTimeout(async () => {
+        try {
+          await tempMessage.delete()
+        } catch (error) {
+          logger.debug("Could not delete temporary message:", error.message)
+        }
+      }, 30000)
 
-  async handleButtonInteraction(interaction) {
-    try {
-      const customId = interaction.customId
+      logger.debug(`Created temporary button for ${user.tag} to access form ${config.id}`)
       
-      if (customId.startsWith('show_modal_')) {
-        const configId = customId.replace('show_modal_', '')
-        
-        const config = this.embedConfigs.get(configId)
-        
-        if (!config) {
-          await interaction.reply({
-            content: "❌ Form configuration not found.",
-            flags: 64 // EPHEMERAL flag
-          })
-          return
-        }
-
-        const modal = new ModalBuilder()
-          .setCustomId(`embed_modal_${config.id}`)
-          .setTitle(config.title.substring(0, 45))
-
-        const components = []
-        
-        for (let i = 0; i < Math.min(config.fields.length, 5); i++) {
-          const field = config.fields[i]
-          const textInput = new TextInputBuilder()
-            .setCustomId(`field_${i}`)
-            .setLabel(field.label.substring(0, 45))
-            .setStyle(field.multiline ? TextInputStyle.Paragraph : TextInputStyle.Short)
-            .setRequired(field.required || false)
-            .setMaxLength(field.maxLength || (field.multiline ? 4000 : 1000))
-
-          if (field.placeholder) {
-            textInput.setPlaceholder(field.placeholder.substring(0, 100))
-          }
-
-          const actionRow = new ActionRowBuilder().addComponents(textInput)
-          components.push(actionRow)
-        }
-
-        modal.addComponents(...components)
-        await interaction.showModal(modal)
-      }
     } catch (error) {
-      logger.error("Error handling button interaction:", error)
+      logger.error("Error handling reaction:", error)
     }
   }
 
+  /**
+   * Create modal form from configuration
+   */
+  async createModal(config) {
+    const modal = new ModalBuilder()
+      .setCustomId(`embed_modal_${config.id}`)
+      .setTitle(config.title.substring(0, 45)) // Discord limit
+
+    const components = []
+    
+    // Create text inputs for each field (max 5 per modal)
+    for (let i = 0; i < Math.min(config.fields.length, 5); i++) {
+      const field = config.fields[i]
+      const textInput = new TextInputBuilder()
+        .setCustomId(`field_${i}`)
+        .setLabel(field.label.substring(0, 45))
+        .setStyle(field.multiline ? TextInputStyle.Paragraph : TextInputStyle.Short)
+        .setRequired(field.required || false)
+        .setMaxLength(field.maxLength || (field.multiline ? 4000 : 1000))
+
+      if (field.placeholder) {
+        textInput.setPlaceholder(field.placeholder.substring(0, 100))
+      }
+
+      const actionRow = new ActionRowBuilder().addComponents(textInput)
+      components.push(actionRow)
+    }
+
+    modal.addComponents(...components)
+    return modal
+  }
+
+  /**
+   * Handle modal form submissions
+   */
   async handleModalSubmit(interaction) {
     try {
       const customId = interaction.customId
@@ -256,7 +330,7 @@ export class EmbedManager {
       if (!config) {
         await interaction.reply({
           content: "❌ Form configuration not found.",
-          flags: 64 // EPHEMERAL flag
+          flags: 64 // EPHEMERAL
         })
         return
       }
@@ -274,22 +348,25 @@ export class EmbedManager {
       }
 
       // Send response to target channel
-      await this.sendResponse(config, responses, interaction.user, interaction.guild || this.client.guilds.cache.get(config.guildId))
+      await this.sendResponse(config, responses, interaction.user, interaction.guild)
 
       await interaction.reply({
         content: "✅ Your response has been submitted successfully!",
-        flags: 64 // EPHEMERAL flag
+        flags: 64 // EPHEMERAL
       })
 
     } catch (error) {
       logger.error("Error handling modal submit:", error)
       await interaction.reply({
         content: "❌ An error occurred while processing your response.",
-        flags: 64 // EPHEMERAL flag
-      })
+        flags: 64 // EPHEMERAL
+      }).catch(() => {}) // Ignore if already replied
     }
   }
 
+  /**
+   * Send form response to target channel with server nickname
+   */
   async sendResponse(config, responses, user, guild) {
     try {
       if (!guild) {
@@ -306,6 +383,7 @@ export class EmbedManager {
       // Get the member to access their server nickname
       const member = guild.members.cache.get(user.id)
       const displayName = member ? (member.nickname || member.displayName || user.username) : user.username
+
       const embed = new EmbedBuilder()
         .setTitle(config.responseTitle)
         .setColor(config.color)
@@ -336,6 +414,7 @@ export class EmbedManager {
     }
   }
 
+  // Configuration management methods
   getEmbedConfigs() {
     return Array.from(this.embedConfigs.values())
   }

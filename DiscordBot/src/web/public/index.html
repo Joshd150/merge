@@ -329,8 +329,31 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="emoji">Reaction Emoji</label>
-                            <input type="text" id="emoji" placeholder="📝" value="📝">
+                            <label for="emoji">Button Emoji (Optional)</label>
+                            <input type="text" id="emoji" placeholder="📝 (leave empty for text-only button)" value="">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="buttonLabel">Button Text</label>
+                        <input type="text" id="buttonLabel" placeholder="Open Form" value="Open Form">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Interaction Type</label>
+                        <select id="interactionType">
+                            <option value="button">Button (Recommended - Direct Modal)</option>
+                            <option value="reaction">Emoji Reaction (Has Limitations)</option>
+                            <option value="none">Display Only (No Interaction)</option>
+                        </select>
+                    </div>
+
+                    <div id="interactionHelp" class="form-group" style="background: #e3f2fd; padding: 15px; border-radius: 8px; border-left: 4px solid #2196f3;">
+                        <strong>💡 Button Method (Recommended):</strong>
+                        <ul style="margin: 10px 0; padding-left: 20px;">
+                            <li>✅ User clicks button → modal pops up instantly</li>
+                            <li>✅ No intermediate steps or messages</li>
+                            <li>✅ Seamless Discord interface experience</li>
                         </div>
                     </div>
 
@@ -426,6 +449,8 @@
             document.getElementById('description').addEventListener('input', updatePreview);
             document.getElementById('color').addEventListener('input', updatePreview);
             document.getElementById('emoji').addEventListener('input', updatePreview);
+            document.getElementById('buttonLabel').addEventListener('input', updatePreview);
+            document.getElementById('interactionType').addEventListener('change', updatePreview);
             document.getElementById('responseTitle').addEventListener('input', updatePreview);
         });
 
@@ -535,6 +560,8 @@
                 document.getElementById('description').value = config.description;
                 document.getElementById('color').value = config.color;
                 document.getElementById('emoji').value = config.emoji;
+                document.getElementById('buttonLabel').value = config.buttonLabel || 'Open Form';
+                document.getElementById('interactionType').value = config.interactionType || 'button';
                 document.getElementById('responseTitle').value = config.responseTitle;
                 
                 // Load guild and channels if available
@@ -636,6 +663,8 @@
             const description = document.getElementById('description').value || 'Click the reaction below to open the form.';
             const color = document.getElementById('color').value;
             const emoji = document.getElementById('emoji').value;
+            const buttonLabel = document.getElementById('buttonLabel').value || 'Open Form';
+            const interactionType = document.getElementById('interactionType').value;
             const responseTitle = document.getElementById('responseTitle').value || 'Response';
             
             const fields = Array.from(document.querySelectorAll('.field-item')).map(item => {
@@ -654,29 +683,56 @@
                 } : null;
             }).filter(Boolean);
             
-            // Update description based on whether emoji is present
-            const finalDescription = description || (emoji ? 'Click the reaction below to open the form.' : 'Information embed - no interaction required.');
+            // Update description based on interaction type
+            let finalDescription = description;
+            if (!finalDescription) {
+                if (interactionType === 'button' && fields.length > 0) {
+                    finalDescription = 'Click the button below to open the form.';
+                } else if (interactionType === 'reaction' && emoji && fields.length > 0) {
+                    finalDescription = 'Click the reaction below to open the form.';
+                } else {
+                    finalDescription = 'Information embed - no interaction required.';
+                }
+            }
             
             // Update main embed preview
+            let interactionPreview = '';
+            if (interactionType === 'button' && fields.length > 0) {
+                interactionPreview = `<div style="background: #5865F2; color: white; padding: 8px 16px; border-radius: 4px; display: inline-block; margin-top: 10px; cursor: pointer;">
+                    ${emoji ? emoji + ' ' : ''}${buttonLabel}
+                </div>`;
+            } else if (interactionType === 'reaction' && emoji && fields.length > 0) {
+                interactionPreview = `<div class="reaction-preview">
+                    <span class="emoji-display">${emoji}</span> 1 reaction (auto-managed)
+                </div>`;
+            } else {
+                interactionPreview = '<div class="reaction-preview">Display-only embed (no interaction)</div>';
+            }
+            
             document.getElementById('embedPreview').innerHTML = `
                 <div class="discord-embed" style="border-left-color: ${color}">
                     <div class="embed-title">${title}</div>
                     <div class="embed-description">${finalDescription}</div>
-                    <div class="embed-footer">${emoji ? 'Click the reaction to open the form' : 'Display-only embed'}</div>
+                    <div class="embed-footer">${getFooterText(interactionType, fields.length)}</div>
                 </div>
-                ${emoji ? `<div class="reaction-preview">
-                    <span class="emoji-display">${emoji}</span> 1 reaction (auto-managed)
-                </div>` : '<div class="reaction-preview">No reactions (display-only)</div>'}
+                ${interactionPreview}
             `;
             
             // Update response preview
-            document.getElementById('responsePreview').innerHTML = emoji && fields.length > 0 ? `
+            document.getElementById('responsePreview').innerHTML = fields.length > 0 && interactionType !== 'none' ? `
                 <div class="discord-embed" style="border-left-color: ${color}">
                     <div class="embed-title">${responseTitle}</div>
                     ${fields.map(field => field.preview).join('')}
                     <div class="embed-footer">Submitted by ServerNickname • User ID: 123456789</div>
                 </div>
-            ` : '<div style="color: #72767d; font-style: italic;">No response preview (display-only embed or no fields)</div>';
+            ` : '<div style="color: #72767d; font-style: italic;">No response preview (display-only embed)</div>';
+        }
+
+        function getFooterText(interactionType, fieldCount) {
+            if (fieldCount === 0) return 'Information embed';
+            if (interactionType === 'button') return 'Click the button below to respond';
+            if (interactionType === 'reaction') return 'Click the reaction to respond';
+            return 'Display-only embed';
         }
 
         document.getElementById('embedForm').addEventListener('submit', async function(e) {
@@ -696,6 +752,8 @@
                 description: document.getElementById('description').value,
                 color: document.getElementById('color').value,
                 emoji: document.getElementById('emoji').value,
+                buttonLabel: document.getElementById('buttonLabel').value,
+                interactionType: document.getElementById('interactionType').value,
                 responseTitle: document.getElementById('responseTitle').value,
                 guildId: guildId,
                 channelId: channelId,
@@ -800,6 +858,8 @@
             document.getElementById('embedForm').reset();
             document.getElementById('color').value = '#5865F2';
             document.getElementById('emoji').value = '';
+            document.getElementById('buttonLabel').value = 'Open Form';
+            document.getElementById('interactionType').value = 'button';
             document.getElementById('fieldsContainer').innerHTML = '';
             updatePreview();
             showStatus('Form cleared', 'success');
