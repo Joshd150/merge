@@ -24,6 +24,17 @@ export class DataStore {
     try {
       await this.ensureDataDir()
 
+      // Try to load from multiple possible locations for backward compatibility
+      const possibleFiles = [
+        this.dataFile,                    // Current location
+        this.backupFile,                  // Current backup
+        '../Bot2/data/botData.json',      // Bot2 data
+        '../Bot2/data/botData.backup.json', // Bot2 backup
+        '../Bot1/data/botData.json',      // Bot1 data (if exists)
+        'botData.json',                   // Root level
+        'data.json'                       // Alternative name
+      ]
+
       // Try to load main file first
       try {
         const data = await fs.readFile(this.dataFile, "utf8")
@@ -31,7 +42,23 @@ export class DataStore {
         logger.info("Loaded bot data from storage")
         return parsed
       } catch (mainError) {
-        // If main file fails, try backup
+        // If main file fails, try all possible locations
+        for (const filePath of possibleFiles.slice(1)) {
+          try {
+            const data = await fs.readFile(filePath, "utf8")
+            const parsed = JSON.parse(data)
+            logger.info(`Loaded bot data from legacy location: ${filePath}`)
+            
+            // Save to current location for future use
+            await this.save(parsed)
+            return parsed
+          } catch (error) {
+            // Continue to next file
+            continue
+          }
+        }
+        
+        // If no files found, throw original error
         try {
           const backupData = await fs.readFile(this.backupFile, "utf8")
           const parsed = JSON.parse(backupData)

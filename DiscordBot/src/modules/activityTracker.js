@@ -22,6 +22,13 @@ export class ActivityTracker {
         this.activityData.userActivity = {}
       }
 
+      // Migrate legacy data format if needed
+      if (this.activityData.users && !this.activityData.userActivity) {
+        logger.info("Migrating legacy user activity data format")
+        this.activityData.userActivity = this.activityData.users
+        delete this.activityData.users
+      }
+
       // Start auto-save
       this.dataStore.startAutoSave(this.activityData)
 

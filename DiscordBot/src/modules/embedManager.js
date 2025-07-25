@@ -23,12 +23,20 @@ export class EmbedManager {
     try {
       const data = await this.dataStore.load()
       
-      // Load existing embed configurations
-      if (data.embedConfigs) {
+      // Handle legacy data structure migration
+      if (data.embedConfigs && typeof data.embedConfigs === 'object') {
+        // New format - embedConfigs is already an object
         for (const [id, config] of Object.entries(data.embedConfigs)) {
           this.embedConfigs.set(id, config)
         }
+      } else if (data.embeds && Array.isArray(data.embeds)) {
+        // Legacy format - embeds was an array
+        for (const config of data.embeds) {
+          this.embedConfigs.set(config.id || Date.now().toString(), config)
+        }
+        logger.info("Migrated legacy embed configurations")
       }
+
 
       // Restore active embeds
       if (data.activeEmbeds) {
