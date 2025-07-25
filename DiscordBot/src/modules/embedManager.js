@@ -105,21 +105,26 @@ export class EmbedManager {
         .setDescription(config.description)
         .setColor(config.color)
         .setFooter({
-          text: "Click the reaction below to respond",
+          text: config.emoji ? "Click the reaction below to respond" : "Interactive embed",
           iconURL: guild.iconURL()
         })
         .setTimestamp()
 
       const message = await channel.send({ embeds: [embed] })
-      await message.react(config.emoji)
+      
+      // Only add reaction if emoji is configured
+      if (config.emoji && config.emoji.trim()) {
+        await message.react(config.emoji)
+        
+        // Store the active embed only if it has reactions
+        this.activeEmbeds.set(message.id, {
+          configId: configId,
+          channelId: channel.id,
+          guildId: guild.id,
+          createdAt: new Date().toISOString()
+        })
+      }
 
-      // Store the active embed
-      this.activeEmbeds.set(message.id, {
-        configId: configId,
-        channelId: channel.id,
-        guildId: guild.id,
-        createdAt: new Date().toISOString()
-      })
 
       await this.saveData()
       
@@ -141,7 +146,7 @@ export class EmbedManager {
       if (!activeEmbed) return
 
       const config = this.embedConfigs.get(activeEmbed.configId)
-      if (!config) return
+      if (!config || !config.emoji) return
 
       // Check if the reaction matches the configured emoji
       if (reaction.emoji.name !== config.emoji && reaction.emoji.toString() !== config.emoji) {
