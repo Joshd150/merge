@@ -37,6 +37,9 @@ export const config = {
   inviteFilter: {
     enabled: process.env.INVITE_FILTER_ENABLED !== "false", // Enabled by default
   },
+  web: {
+    port: process.env.WEB_PORT || 3000,
+  },
 }
 
 // Validate required configuration

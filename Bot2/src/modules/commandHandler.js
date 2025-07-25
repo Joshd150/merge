@@ -1,6 +1,7 @@
 import { Collection } from "discord.js"
 import { leagueCommands } from "../commands/leagueCommands.js"
 import { faqCommands } from "../commands/faqCommands.js"
+import { embedCommands } from "../commands/embedCommands.js"
 import { logger } from "../utils/logger.js"
 
 export class CommandHandler {
@@ -18,6 +19,11 @@ export class CommandHandler {
 
     // Load FAQ commands
     for (const command of faqCommands) {
+      this.commands.set(command.data.name, command)
+    }
+
+    // Load embed commands
+    for (const command of embedCommands) {
       this.commands.set(command.data.name, command)
     }
 

@@ -2,11 +2,22 @@ import { logger } from "../utils/logger.js"
 import { config } from "../config/config.js"
 
 export function setupEventHandlers(client, modules) {
-  const { activityTracker, welcomeSystem, newsFeeds, commandHandler, inviteFilter } = modules
+  const { activityTracker, welcomeSystem, newsFeeds, commandHandler, inviteFilter, embedManager } = modules
 
   // Handle slash commands
   client.on("interactionCreate", async (interaction) => {
-    await commandHandler.handleInteraction(interaction)
+    if (interaction.isChatInputCommand()) {
+      await commandHandler.handleInteraction(interaction)
+    } else if (interaction.isModalSubmit()) {
+      await embedManager.handleModalSubmit(interaction)
+    } else if (interaction.isButton()) {
+      await embedManager.handleButtonInteraction(interaction)
+    }
+  })
+
+  // Handle reactions for custom embeds
+  client.on("messageReactionAdd", async (reaction, user) => {
+    await embedManager.handleReaction(reaction, user)
   })
 
   // Track user activity on messages AND filter invites

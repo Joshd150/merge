@@ -2,10 +2,11 @@ import { REST, Routes } from "discord.js"
 import { config } from "../config/config.js"
 import { leagueCommands } from "./leagueCommands.js"
 import { faqCommands } from "./faqCommands.js"
+import { embedCommands } from "./embedCommands.js"
 import { logger } from "../utils/logger.js"
 
 // Combine all commands
-const allCommands = [...leagueCommands, ...faqCommands]
+const allCommands = [...leagueCommands, ...faqCommands, ...embedCommands]
 const commands = allCommands.map((command) => command.data.toJSON())
 
 const rest = new REST().setToken(config.discord.token)

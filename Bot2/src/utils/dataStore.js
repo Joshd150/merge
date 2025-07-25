@@ -3,10 +3,10 @@ import path from "path"
 import { logger } from "./logger.js"
 
 export class DataStore {
-  constructor() {
+  constructor(filename = "botData.json") {
     this.dataDir = "data"
-    this.dataFile = path.join(this.dataDir, "botData.json")
-    this.backupFile = path.join(this.dataDir, "botData.backup.json")
+    this.dataFile = path.join(this.dataDir, filename)
+    this.backupFile = path.join(this.dataDir, filename.replace('.json', '.backup.json'))
     this.saveInterval = null
     this.isSaving = false
   }

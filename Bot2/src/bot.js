@@ -5,9 +5,11 @@ import { WelcomeSystem } from "./modules/welcomeSystem.js"
 import { NewsFeeds } from "./modules/newsFeeds.js"
 import { CommandHandler } from "./modules/commandHandler.js"
 import { InviteFilter } from "./modules/inviteFilter.js"
+import { EmbedManager } from "./modules/embedManager.js"
 import { deployCommands } from "./commands/deployCommands.js"
 import { setupEventHandlers } from "./events/eventHandlers.js"
 import { logger } from "./utils/logger.js"
+import { WebServer } from "./web/webServer.js"
 
 class GridironBot {
   constructor() {
@@ -20,6 +22,7 @@ class GridironBot {
         GatewayIntentBits.DirectMessages,
         GatewayIntentBits.GuildModeration,
         GatewayIntentBits.GuildPresences,
+        GatewayIntentBits.GuildMessageReactions,
       ],
     })
 
@@ -28,6 +31,8 @@ class GridironBot {
     this.newsFeeds = new NewsFeeds(this.client)
     this.commandHandler = new CommandHandler(this.client)
     this.inviteFilter = new InviteFilter(this.client)
+    this.embedManager = new EmbedManager(this.client)
+    this.webServer = new WebServer(this.client, this.embedManager)
     this.isShuttingDown = false
 
     this.setupBot()
@@ -40,6 +45,7 @@ class GridironBot {
       newsFeeds: this.newsFeeds,
       commandHandler: this.commandHandler,
       inviteFilter: this.inviteFilter,
+      embedManager: this.embedManager,
     })
 
     this.client.once("ready", async () => {
@@ -54,11 +60,15 @@ class GridironBot {
         await this.welcomeSystem.initialize()
         await this.newsFeeds.initialize()
         await this.inviteFilter.initialize()
+        await this.embedManager.initialize()
 
         // Deploy commands and start services
         await deployCommands()
         this.newsFeeds.startNewsFeeds()
         this.activityTracker.startActivityCheck()
+        
+        // Start web server
+        await this.webServer.start()
 
         logger.info("🚀 All systems operational!")
       } catch (error) {
@@ -124,6 +134,8 @@ class GridironBot {
         this.welcomeSystem.shutdown(),
         this.newsFeeds.shutdown(),
         this.inviteFilter.shutdown(),
+        this.embedManager.shutdown(),
+        this.webServer.shutdown(),
       ])
 
       this.client.destroy()
