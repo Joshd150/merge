@@ -303,11 +303,14 @@
                     <div id="configList">
                         <p>Loading configurations...</p>
                     </div>
-                    <button class="btn" onclick="loadConfigurations()">🔄 Refresh</button>
+                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                        <button class="btn" onclick="loadConfigurations()">🔄 Refresh</button>
+                        <button class="btn btn-success" onclick="clearForm()">➕ New Form</button>
+                    </div>
                 </div>
 
                 <form id="embedForm">
-                    <h3>🎨 Embed Design</h3>
+                    <h3 id="formTitle">🎨 Create New Embed Form</h3>
                     
                     <div class="form-group">
                         <label for="title">Embed Title</label>
@@ -337,6 +340,10 @@
                     </div>
 
                     <h3>📍 Channel Configuration</h3>
+                    <p style="color: #6c757d; margin-bottom: 20px; font-size: 14px;">
+                        📌 <strong>Send Embed To:</strong> Where users will see and react to your form<br>
+                        📨 <strong>Send Responses To:</strong> Where submitted answers will be posted
+                    </p>
 
                     <div class="form-group">
                         <label for="guild">Guild</label>
@@ -347,14 +354,14 @@
 
                     <div class="grid-2">
                         <div class="form-group">
-                            <label for="channel">Send Embed To</label>
+                            <label for="channel">📌 Send Embed To</label>
                             <select id="channel" required>
                                 <option value="">Select a channel...</option>
                             </select>
                         </div>
 
                         <div class="form-group">
-                            <label for="targetChannel">Send Responses To</label>
+                            <label for="targetChannel">📨 Send Responses To</label>
                             <select id="targetChannel" required>
                                 <option value="">Select response channel...</option>
                             </select>
@@ -370,7 +377,7 @@
                     <div style="display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap;">
                         <button type="submit" class="btn btn-success">💾 Save Configuration</button>
                         <button type="button" class="btn" onclick="sendEmbed()">🚀 Send to Discord</button>
-                        <button type="button" class="btn btn-danger" onclick="clearForm()">🗑️ Clear Form</button>
+                        <button type="button" class="btn btn-danger" onclick="clearForm()">🗑️ Clear & New</button>
                     </div>
                 </form>
             </div>
@@ -490,11 +497,13 @@
                 configList.innerHTML = configs.map(config => `
                     <div class="config-item">
                         <div>
-                            <strong>${config.title}</strong>
+                            <strong>📝 ${config.title}</strong>
                             <br>
                             <small>📅 Created: ${new Date(config.createdAt).toLocaleDateString()}</small>
                             <br>
-                            <small>📝 Fields: ${config.fields.length} | 🎨 ${config.emoji}</small>
+                            <small>📌 Posts to: ${getChannelName(config.channelId)} → 📨 Responses: ${getChannelName(config.targetChannelId)}</small>
+                            <br>
+                            <small>📝 Fields: ${config.fields.length} | 🎨 ${config.emoji} | 🎨 Color: ${config.color}</small>
                         </div>
                         <div class="config-actions">
                             <button class="btn btn-small" onclick="loadConfiguration('${config.id}')">📝 Edit</button>
@@ -508,12 +517,19 @@
             }
         }
 
+        function getChannelName(channelId) {
+            const channel = channels.find(c => c.id === channelId);
+            return channel ? `#${channel.name}` : 'Unknown';
+        }
         async function loadConfiguration(id) {
             try {
                 const response = await fetch(`/api/embeds/${id}`);
                 const config = await response.json();
                 
                 currentConfigId = id;
+                
+                // Update form title
+                document.getElementById('formTitle').textContent = `🎨 Editing: ${config.title}`;
                 
                 document.getElementById('title').value = config.title;
                 document.getElementById('description').value = config.description;
@@ -777,6 +793,7 @@
 
         function clearForm() {
             currentConfigId = null;
+            document.getElementById('formTitle').textContent = '🎨 Create New Embed Form';
             document.getElementById('embedForm').reset();
             document.getElementById('color').value = '#5865F2';
             document.getElementById('emoji').value = '📝';

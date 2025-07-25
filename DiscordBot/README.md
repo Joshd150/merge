@@ -92,12 +92,25 @@ A comprehensive Discord bot for managing fantasy football leagues with advanced 
 
 ## 🎯 Custom Embed Forms
 
-### Example: Force Win Request
+### Multiple Forms Example
+
+**Form 1: Force Win Request**
+- **Send To**: #general-chat
+- **Responses To**: #admin-requests
 1. **Create Form**: Title "Force Win Request", emoji "⚡"
 2. **Add Field**: "Your Team:" (required, single-line)
-3. **Configure**: Response title "Force Win Requested", target channel
-4. **Deploy**: Send embed to channel
-5. **Usage**: Users react ⚡ → modal opens → submit → admin gets formatted response
+3. **Configure**: Response title "Force Win Requested"
+4. **Deploy**: Send embed to #general-chat
+5. **Usage**: Users in #general-chat react ⚡ → responses go to #admin-requests
+
+**Form 2: Bug Report**
+- **Send To**: #bug-reports
+- **Responses To**: #dev-team
+1. **Create Form**: Title "Bug Report", emoji "🐛"
+2. **Add Fields**: "Bug Description:", "Steps to Reproduce:"
+3. **Configure**: Response title "New Bug Report"
+4. **Deploy**: Send embed to #bug-reports
+5. **Usage**: Users in #bug-reports react 🐛 → responses go to #dev-team
 
 ### Form Features
 - **Field Types**: Single-line or multiline text
