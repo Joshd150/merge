@@ -1,0 +1,20 @@
+{
+  "name": "gridiron-fantasy-league-bot",
+  "version": "1.0.0",
+  "description": "Discord bot for Madden Fantasy League management",
+  "main": "src/bot.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/bot.js",
+    "dev": "node --watch src/bot.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["discord", "bot", "madden", "nfl", "fantasy"],
+  "dependencies": {
+    "@discordjs/builders": "^1.11.2",
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.3.1",
+    "node-cron": "^3.0.3",
+    "rss-parser": "^3.13.0"
+  }
+}
