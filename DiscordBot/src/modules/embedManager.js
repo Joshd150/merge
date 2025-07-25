@@ -156,42 +156,42 @@ export class EmbedManager {
       // Remove the user's reaction to keep it at 1
       await reaction.users.remove(user.id)
 
-      // Create and show modal via DM
-      await this.sendModalDM(user, config, reaction.message.guild)
+      // Create a temporary interaction context to show modal directly
+      await this.createModalInteraction(user, config, reaction.message)
       
     } catch (error) {
       logger.error("Error handling reaction:", error)
     }
   }
 
-  async sendModalDM(user, config, guild) {
+  async createModalInteraction(user, config, message) {
     try {
+      // Send a temporary message with button that will trigger the modal
       const button = new ButtonBuilder()
-        .setCustomId(`show_modal_${config.id}`)
+        .setCustomId(`show_modal_${config.id}_${user.id}`)
         .setLabel(`Open ${config.title}`)
         .setStyle(ButtonStyle.Primary)
         .setEmoji(config.emoji)
 
       const row = new ActionRowBuilder().addComponents(button)
 
-      const embed = new EmbedBuilder()
-        .setTitle("📝 Form Ready")
-        .setDescription(`Click the button below to open the **${config.title}** form.`)
-        .setColor(config.color)
-        .setFooter({
-          text: `From ${guild.name}`,
-          iconURL: guild.iconURL()
-        })
-
-      const dmChannel = await user.createDM()
-      await dmChannel.send({
-        embeds: [embed],
+      const tempMessage = await message.channel.send({
+        content: `<@${user.id}> Click the button below to open the form:`,
         components: [row]
       })
 
-      logger.debug(`Sent modal DM to ${user.tag} for config ${config.id}`)
+      // Delete the temporary message after 30 seconds
+      setTimeout(async () => {
+        try {
+          await tempMessage.delete()
+        } catch (error) {
+          // Message might already be deleted
+        }
+      }, 30000)
+
+      logger.debug(`Created modal trigger for ${user.tag} for config ${config.id}`)
     } catch (error) {
-      logger.error("Error sending modal DM:", error)
+      logger.error("Error creating modal interaction:", error)
     }
   }
 
@@ -200,13 +200,25 @@ export class EmbedManager {
       const customId = interaction.customId
       
       if (customId.startsWith('show_modal_')) {
-        const configId = customId.replace('show_modal_', '')
+        const parts = customId.split('_')
+        const configId = parts[2]
+        const userId = parts[3]
+        
+        // Only allow the user who triggered it to use the button
+        if (interaction.user.id !== userId) {
+          await interaction.reply({
+            content: "❌ This form is not for you.",
+            flags: 64 // EPHEMERAL flag
+          })
+          return
+        }
+        
         const config = this.embedConfigs.get(configId)
         
         if (!config) {
           await interaction.reply({
             content: "❌ Form configuration not found.",
-            ephemeral: true
+            flags: 64 // EPHEMERAL flag
           })
           return
         }
@@ -236,6 +248,13 @@ export class EmbedManager {
 
         modal.addComponents(...components)
         await interaction.showModal(modal)
+        
+        // Delete the temporary message after modal is shown
+        try {
+          await interaction.message.delete()
+        } catch (error) {
+          // Message might already be deleted
+        }
       }
     } catch (error) {
       logger.error("Error handling button interaction:", error)
@@ -251,7 +270,7 @@ export class EmbedManager {
       if (!config) {
         await interaction.reply({
           content: "❌ Form configuration not found.",
-          ephemeral: true
+          flags: 64 // EPHEMERAL flag
         })
         return
       }
@@ -273,20 +292,25 @@ export class EmbedManager {
 
       await interaction.reply({
         content: "✅ Your response has been submitted successfully!",
-        ephemeral: true
+        flags: 64 // EPHEMERAL flag
       })
 
     } catch (error) {
       logger.error("Error handling modal submit:", error)
       await interaction.reply({
         content: "❌ An error occurred while processing your response.",
-        ephemeral: true
+        flags: 64 // EPHEMERAL flag
       })
     }
   }
 
   async sendResponse(config, responses, user, guild) {
     try {
+      if (!guild) {
+        logger.error("Guild not found for sending response")
+        return
+      }
+      
       const targetChannel = guild.channels.cache.get(config.targetChannelId)
       if (!targetChannel) {
         logger.error(`Target channel ${config.targetChannelId} not found`)
