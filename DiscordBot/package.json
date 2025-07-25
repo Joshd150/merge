@@ -1,0 +1,29 @@
+{
+  "name": "gridiron-discord-bot",
+  "version": "2.0.0",
+  "description": "Unified Discord bot for Gridiron Fantasy League with embed builder and management tools",
+  "main": "src/bot.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/bot.js",
+    "dev": "node --watch src/bot.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "madden",
+    "nfl",
+    "fantasy",
+    "embed-builder"
+  ],
+  "dependencies": {
+    "@discordjs/builders": "^1.11.2",
+    "cors": "^2.8.5",
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.3.1",
+    "express": "^4.21.2",
+    "node-cron": "^3.0.3",
+    "rss-parser": "^3.13.0"
+  }
+}
