@@ -53,7 +53,13 @@ export const leagueCommands = [
           .setTimestamp()
 
         if (inactiveMembers.size > 0) {
-          const memberList = inactiveMembers.map((member) => `• **${member.user.username}**`).join("\n")
+          const memberList = inactiveMembers.map((member) => {
+            const nickname = member.nickname || member.displayName
+            const username = member.user.username
+            return nickname !== username 
+              ? `• <@${member.user.id}> (${nickname})`
+              : `• <@${member.user.id}>`
+          }).join("\n")
 
           embed.addFields({
             name: `😴 Inactive Members (${inactiveMembers.size})`,
@@ -63,7 +69,13 @@ export const leagueCommands = [
         }
 
         if (unassignedMembers.size > 0) {
-          const unassignedList = unassignedMembers.map((member) => `• **${member.user.username}**`).join("\n")
+          const unassignedList = unassignedMembers.map((member) => {
+            const nickname = member.nickname || member.displayName
+            const username = member.user.username
+            return nickname !== username 
+              ? `• <@${member.user.id}> (${nickname})`
+              : `• <@${member.user.id}>`
+          }).join("\n")
 
           embed.addFields({
             name: `❓ Unassigned Members (${unassignedMembers.size})`,
@@ -128,7 +140,13 @@ export const leagueCommands = [
           .setTimestamp()
 
         if (activeMembers.size > 0) {
-          const memberList = activeMembers.map((member) => `• **${member.user.username}**`).join("\n")
+          const memberList = activeMembers.map((member) => {
+            const nickname = member.nickname || member.displayName
+            const username = member.user.username
+            return nickname !== username 
+              ? `• <@${member.user.id}> (${nickname})`
+              : `• <@${member.user.id}>`
+          }).join("\n")
 
           embed.addFields({
             name: `👥 Active Members (${activeMembers.size})`,
